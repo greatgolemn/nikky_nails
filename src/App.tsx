@@ -24,6 +24,9 @@ import { CatalogPage } from './pages/store/CatalogPage';
 import { SettingsPage } from './pages/store/SettingsPage';
 import { CustomerSimPage } from './pages/store/CustomerSimPage';
 import { MemberDetailPage } from './pages/store/MemberDetailPage';
+import { StaffManager } from './pages/store/StaffManager';
+import { BillingPage } from './pages/store/BillingPage';
+import { AcceptInvite } from './pages/AcceptInvite';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 /**
@@ -43,6 +46,7 @@ const AppRoutes: React.FC = () => {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/invite/:inviteId" element={<AcceptInvite />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -53,6 +57,7 @@ const AppRoutes: React.FC = () => {
     return (
       <Routes>
         <Route path="/onboarding" element={<OnboardingWizard />} />
+        <Route path="/invite/:inviteId" element={<AcceptInvite />} />
         <Route path="*" element={<Navigate to="/onboarding" replace />} />
       </Routes>
     );
@@ -62,6 +67,7 @@ const AppRoutes: React.FC = () => {
   if (userProfile.role === 'super_admin') {
     return (
       <Routes>
+        <Route path="/invite/:inviteId" element={<AcceptInvite />} />
         <Route element={<AdminLayout />}>
           <Route path="/admin" element={<SuperAdminDashboard />} />
           <Route path="/admin/tenants" element={<TenantList />} />
@@ -76,6 +82,7 @@ const AppRoutes: React.FC = () => {
   return (
     <TenantProvider>
       <Routes>
+        <Route path="/invite/:inviteId" element={<AcceptInvite />} />
         <Route element={<StoreLayout />}>
           <Route index element={<StoreDashboard />} />
           <Route path="/members" element={<MemberListPage />} />
@@ -83,7 +90,9 @@ const AppRoutes: React.FC = () => {
           <Route path="/members/:memberId" element={<MemberDetailPage />} />
           <Route path="/bookings" element={<BookingsPage />} />
           <Route path="/catalog" element={<CatalogPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings" element={<RoleGuard allowedRoles={['store_owner']}><SettingsPage /></RoleGuard>} />
+          <Route path="/staff" element={<RoleGuard allowedRoles={['store_owner']}><StaffManager /></RoleGuard>} />
+          <Route path="/billing" element={<RoleGuard allowedRoles={['store_owner']}><BillingPage /></RoleGuard>} />
           <Route path="/preview" element={<CustomerSimPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

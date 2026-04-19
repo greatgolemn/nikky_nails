@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -15,6 +15,8 @@ const NAV_ITEMS = [
   { path: '/catalog', icon: <CreditCard size={18} />, label: 'บริการ & แพ็กเกจ' },
   { path: '/members/new', icon: <UserPlus size={18} />, label: 'ลงทะเบียนลูกค้า' },
   { path: '/preview', icon: <Smartphone size={18} />, label: 'พรีวิวสมาร์ทโฟน' },
+  { path: '/staff', icon: <Users size={18} />, label: 'จัดการพนักงาน' },
+  { path: '/billing', icon: <CreditCard size={18} />, label: 'แพ็กเกจของร้าน' },
   { path: '/settings', icon: <Settings size={18} />, label: 'ตั้งค่าระบบ' },
 ];
 
@@ -30,6 +32,14 @@ export const StoreLayout: React.FC = () => {
     navigate(path);
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
+
+  useEffect(() => {
+    if (shopConfig?.theme?.primaryColor) {
+      document.documentElement.style.setProperty('--color-primary', shopConfig.theme.primaryColor);
+    } else {
+      document.documentElement.style.setProperty('--color-primary', '#C89595'); // Default theme
+    }
+  }, [shopConfig?.theme?.primaryColor]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
