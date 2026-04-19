@@ -5,7 +5,7 @@ import { Plus, Trash2, Zap, X, Save } from 'lucide-react';
 
 interface ServiceTemplatesManagerProps {
   services: ServiceTemplate[];
-  onAdd: (service: Omit<ServiceTemplate, 'id'>) => void;
+  onAdd: (service: Omit<ServiceTemplate, 'id' | 'tenantId'>) => void;
   onDelete: (id: string) => void;
 }
 

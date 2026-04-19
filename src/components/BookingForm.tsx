@@ -8,7 +8,7 @@ interface BookingFormProps {
   services: ServiceTemplate[];
   branches: Branch[];
   shopConfig?: ShopConfig;
-  onSubmit: (booking: Omit<Booking, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  onSubmit: (booking: Omit<Booking, 'id' | 'createdAt' | 'status' | 'tenantId'>) => Promise<void>;
   onClose: () => void;
 }
 

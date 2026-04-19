@@ -1,99 +1,233 @@
-/**
- * LushNail CRM Security Rules
- */
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    // Member: { name, phone, points, tier, totalSpent, lastVisit, createdAt }
-    // Package: { memberId, title, totalSessions, remainingSessions, expiryDate, status }
-    // Transaction: { memberId, type, amount, pointsChange, serviceName, timestamp }
-    // Branch: { name, phone, lat, lng, address, createdAt }
-    // ===============================================================
 
-    // Helper functions
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    
+    // Get the current user's profile document
+    function getUserProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Get the tenantId of the current user
+    function getUserTenantId() {
+      return getUserProfile().tenantId;
+    }
+
+    // Get the role of the current user
+    function getUserRole() {
+      return getUserProfile().role;
+    }
+
+    // Check if user is Super Admin
+    function isSuperAdmin() {
+      return request.auth != null && getUserRole() == 'super_admin';
+    }
+
+    // Check if user is Store Owner
+    function isStoreOwner() {
+      return request.auth != null && getUserRole() == 'store_owner';
+    }
+
+    // Check if user belongs to the given tenant
+    function belongsToTenant(tenantId) {
+      return getUserTenantId() == tenantId;
+    }
+
+    // Check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         request.auth.token.email == "greatgolemn@gmail.com"); 
-    }
-
-    function isOwner(memberUid) {
-      // In this CRM, we often check by phone or uid if linked. 
-      // For simple kiosk/LINE OA demo, we permit reading if the phone matches (to be implemented in app logic)
-      // but for security rules, we stick to UID if auth is used.
-      return isAuthenticated() && request.auth.uid == memberUid;
-    }
-
-    // Validation
-    function isValidMember(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.phone is string && data.phone.size() >= 9 &&
-             data.points is number && data.points >= 0 &&
-             data.tier in ['Bronze', 'Silver', 'Gold'];
-    }
-
-    function isValidPackage(data) {
-      return data.title is string && data.title.size() > 0 &&
-             data.totalSessions is number && data.remainingSessions is number &&
-             data.remainingSessions <= data.totalSessions;
-    }
-
-    // Rules
-    match /members/{memberId} {
-      // Admins (Salon Staff) can do everything
-      allow read, write: if isAdmin();
-      
-      // Customers can read their own data
-      // For a demo, we might allow reading by phone if we don't force full auth for customers immediately
-      // but strictly:
-      allow read: if isOwner(memberId);
-    }
-
-    match /packages/{packageId} {
-      allow read, write: if isAdmin();
-      allow read: if isAuthenticated() && isOwner(get(/databases/$(database)/documents/packages/$(packageId)).data.memberId);
-    }
-
-    match /transactions/{transactionId} {
-      allow read, create: if isAdmin();
-      allow read: if isAuthenticated() && isOwner(resource.data.memberId);
-    }
-
+    // ============================================
+    // USER PROFILES
+    // ============================================
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      // Users can read their own profile
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+      
+      // Users can create their own profile (during onboarding)
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Users can update their own profile, Super Admin can update any
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+      
+      // Only Super Admin can delete user profiles
+      allow delete: if isSuperAdmin();
     }
 
-    match /packageTemplates/{templateId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    match /serviceTemplates/{templateId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    match /shopConfig/{configId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    match /branches/{branchId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    match /bookings/{bookingId} {
-      allow read, write: if isAdmin();
+    // ============================================
+    // TENANTS
+    // ============================================
+    match /tenants/{tenantId} {
+      // Super Admin can read all tenants; others can only read their own
+      allow read: if isAuthenticated() && (isSuperAdmin() || belongsToTenant(tenantId));
+      
+      // Any authenticated user can create a tenant (during onboarding)
       allow create: if isAuthenticated();
+      
+      // Super Admin or Store Owner of this tenant can update it
+      allow update: if isAuthenticated() && (isSuperAdmin() || (isStoreOwner() && belongsToTenant(tenantId)));
+      
+      // Only Super Admin can delete tenants
+      allow delete: if isSuperAdmin();
+    }
+
+    // ============================================
+    // SHOP CONFIG
+    // ============================================
+    match /shopConfig/{tenantId} {
+      // Super Admin or tenant members can read
+      allow read: if isAuthenticated() && (isSuperAdmin() || belongsToTenant(tenantId));
+      
+      // Store Owner can create/update their shop config
+      allow create, update: if isAuthenticated() && (isSuperAdmin() || (isStoreOwner() && belongsToTenant(tenantId)));
+      
+      // Only Super Admin can delete
+      allow delete: if isSuperAdmin();
+    }
+
+    // ============================================
+    // MEMBERS (Customers)
+    // ============================================
+    match /members/{memberId} {
+      // Read: Super Admin, or user belongs to the same tenant as the member
+      allow read: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      // Create: must include tenantId matching the user's tenant
+      allow create: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(request.resource.data.tenantId));
+      
+      // Update: member must belong to user's tenant
+      allow update: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      // Delete: only Store Owner of the same tenant or Super Admin
+      allow delete: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(resource.data.tenantId)));
+    }
+
+    // ============================================
+    // PACKAGES
+    // ============================================
+    match /packages/{packageId} {
+      allow read: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      allow create: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(request.resource.data.tenantId));
+      
+      allow update: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      allow delete: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(resource.data.tenantId)));
+    }
+
+    // ============================================
+    // TRANSACTIONS
+    // ============================================
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      allow create: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(request.resource.data.tenantId));
+      
+      // Transactions are immutable — no update
+      allow update: if false;
+      
+      // Only Super Admin or Store Owner can delete
+      allow delete: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(resource.data.tenantId)));
+    }
+
+    // ============================================
+    // BOOKINGS
+    // ============================================
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      allow create: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(request.resource.data.tenantId));
+      
+      allow update: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      allow delete: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(resource.data.tenantId)));
+    }
+
+    // ============================================
+    // PACKAGE TEMPLATES
+    // ============================================
+    match /packageTemplates/{templateId} {
+      allow read: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      allow create: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(request.resource.data.tenantId)));
+      
+      allow update, delete: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(resource.data.tenantId)));
+    }
+
+    // ============================================
+    // SERVICE TEMPLATES
+    // ============================================
+    match /serviceTemplates/{templateId} {
+      allow read: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      allow create: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(request.resource.data.tenantId)));
+      
+      allow update, delete: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(resource.data.tenantId)));
+    }
+
+    // ============================================
+    // BRANCHES
+    // ============================================
+    match /branches/{branchId} {
+      allow read: if isAuthenticated() && 
+        (isSuperAdmin() || belongsToTenant(resource.data.tenantId));
+      
+      allow create: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(request.resource.data.tenantId)));
+      
+      allow update, delete: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(resource.data.tenantId)));
+    }
+
+    // ============================================
+    // INVITATIONS
+    // ============================================
+    match /invitations/{inviteId} {
+      // Anyone authenticated can read (to accept invitations)
+      allow read: if isAuthenticated();
+      
+      // Store Owner can create invitations for their tenant
+      allow create: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(request.resource.data.tenantId)));
+      
+      // Update (accept/expire) — authenticated users
+      allow update: if isAuthenticated();
+      
+      // Delete — Store Owner or Super Admin
+      allow delete: if isAuthenticated() && 
+        (isSuperAdmin() || (isStoreOwner() && belongsToTenant(resource.data.tenantId)));
+    }
+
+    // ============================================
+    // DENY ALL ELSE
+    // ============================================
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

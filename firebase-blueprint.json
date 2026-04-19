@@ -1,10 +1,77 @@
 {
   "entities": {
+    "Tenant": {
+      "title": "Tenant",
+      "description": "A salon store (tenant) registered on the NailSaaS platform",
+      "type": "object",
+      "properties": {
+        "shopName": { "type": "string", "description": "Store display name" },
+        "shopPhone": { "type": "string", "description": "Store phone number" },
+        "ownerId": { "type": "string", "description": "Firebase Auth UID of the store owner" },
+        "subscription": {
+          "type": "object",
+          "properties": {
+            "plan": { "type": "string", "enum": ["trial", "basic", "pro"] },
+            "status": { "type": "string", "enum": ["active", "expired", "cancelled"] },
+            "maxMembers": { "type": "number" },
+            "startedAt": { "type": "string", "format": "date-time" },
+            "expiresAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "lineConfig": {
+          "type": "object",
+          "properties": {
+            "channelAccessToken": { "type": "string" },
+            "channelSecret": { "type": "string" },
+            "webhookUrl": { "type": "string" }
+          }
+        },
+        "theme": {
+          "type": "object",
+          "properties": {
+            "primaryColor": { "type": "string" },
+            "logoUrl": { "type": "string" }
+          }
+        },
+        "isActive": { "type": "boolean", "description": "Whether the store is currently active" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["shopName", "ownerId", "isActive"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Platform user profile linked to Firebase Auth",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "store_owner", "staff"] },
+        "tenantId": { "type": "string", "description": "The tenant this user belongs to (null for super_admin)" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Staff invitation sent by a store owner",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["store_owner", "staff"] },
+        "invitedBy": { "type": "string", "description": "UID of the inviter" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "expired"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tenantId", "email", "role", "status"]
+    },
     "Member": {
       "title": "Member",
       "description": "Salon member information and loyalty status",
       "type": "object",
       "properties": {
+        "tenantId": { "type": "string", "description": "The tenant this member belongs to" },
         "name": { "type": "string", "description": "Customer name" },
         "phone": { "type": "string", "description": "Phone number used for identification" },
         "points": { "type": "number", "description": "Current loyalty points balance" },
@@ -16,13 +83,14 @@
         "lastVisit": { "type": "string", "format": "date-time", "description": "Timestamp of the last salon visit" },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the member was registered" }
       },
-      "required": ["name", "phone", "points", "tier"]
+      "required": ["tenantId", "name", "phone", "points", "tier"]
     },
     "Package": {
       "title": "Package",
       "description": "Prepaid salon services or subscription packages",
       "type": "object",
       "properties": {
+        "tenantId": { "type": "string" },
         "memberId": { "type": "string", "description": "Reference to the owner member" },
         "title": { "type": "string", "description": "Package name (e.g., Gel Polish x10)" },
         "totalSessions": { "type": "number", "description": "Original session count" },
@@ -30,13 +98,14 @@
         "expiryDate": { "type": "string", "format": "date-time", "description": "When the package expires" },
         "status": { "type": "string", "enum": ["active", "expired", "depleted"] }
       },
-      "required": ["memberId", "title", "totalSessions", "remainingSessions", "status"]
+      "required": ["tenantId", "memberId", "title", "totalSessions", "remainingSessions", "status"]
     },
     "Transaction": {
       "title": "Transaction",
       "description": "Record of points, spending, or package usage",
       "type": "object",
       "properties": {
+        "tenantId": { "type": "string" },
         "memberId": { "type": "string", "description": "Reference to the member" },
         "type": { "type": "string", "enum": ["point_earn", "point_redeem", "package_buy", "package_use"] },
         "amount": { "type": "number", "description": "Currency amount if applicable" },
@@ -44,32 +113,34 @@
         "serviceName": { "type": "string", "description": "Name of service performed" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
-      "required": ["memberId", "type", "timestamp"]
+      "required": ["tenantId", "memberId", "type", "timestamp"]
     },
     "PackageTemplate": {
       "title": "PackageTemplate",
-      "description": "Pre-defined package options created by admin",
+      "description": "Pre-defined package options created by store owner",
       "type": "object",
       "properties": {
+        "tenantId": { "type": "string" },
         "title": { "type": "string" },
         "price": { "type": "number" },
         "sessions": { "type": "number" }
       },
-      "required": ["title", "price", "sessions"]
+      "required": ["tenantId", "title", "price", "sessions"]
     },
     "ServiceTemplate": {
       "title": "ServiceTemplate",
       "description": "Pre-defined standard salon services",
       "type": "object",
       "properties": {
+        "tenantId": { "type": "string" },
         "name": { "type": "string" },
         "price": { "type": "number" }
       },
-      "required": ["name", "price"]
+      "required": ["tenantId", "name", "price"]
     },
     "ShopConfig": {
       "title": "ShopConfig",
-      "description": "General salon settings and branding",
+      "description": "Per-tenant salon settings and branding",
       "type": "object",
       "properties": {
         "shopName": { "type": "string" },
@@ -85,6 +156,13 @@
               "isOpen": { "type": "boolean" }
             }
           }
+        },
+        "theme": {
+          "type": "object",
+          "properties": {
+            "primaryColor": { "type": "string" },
+            "logoUrl": { "type": "string" }
+          }
         }
       },
       "required": ["shopName"]
@@ -94,6 +172,7 @@
       "description": "Salon branch location details",
       "type": "object",
       "properties": {
+        "tenantId": { "type": "string" },
         "name": { "type": "string", "description": "Branch name (e.g., Siam, Asoke)" },
         "phone": { "type": "string", "description": "Direct contact for this branch" },
         "lat": { "type": "number" },
@@ -101,13 +180,14 @@
         "address": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["name", "lat", "lng"]
+      "required": ["tenantId", "name", "lat", "lng"]
     },
     "Booking": {
       "title": "Booking",
-      "description": "Appointment reservation for laundry services",
+      "description": "Customer appointment reservation",
       "type": "object",
       "properties": {
+        "tenantId": { "type": "string" },
         "memberId": { "type": "string" },
         "memberName": { "type": "string" },
         "memberPhone": { "type": "string" },
@@ -120,41 +200,53 @@
         "notes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["memberId", "serviceName", "date", "timeSlot", "status"]
+      "required": ["tenantId", "memberId", "serviceName", "date", "timeSlot", "status"]
     }
   },
   "firestore": {
+    "/tenants/{tenantId}": {
+      "schema": "Tenant",
+      "description": "Registered salon stores on the NailSaaS platform"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Platform user profiles (linked to Firebase Auth UID)"
+    },
+    "/invitations/{inviteId}": {
+      "schema": "Invitation",
+      "description": "Staff invitation records"
+    },
     "/members/{memberId}": {
       "schema": "Member",
-      "description": "List of all salon customers"
+      "description": "Salon customers partitioned by tenantId"
     },
     "/packages/{packageId}": {
       "schema": "Package",
-      "description": "Individual member packages"
+      "description": "Individual member packages partitioned by tenantId"
     },
     "/transactions/{transactionId}": {
       "schema": "Transaction",
-      "description": "Visit and loyalty history logs"
+      "description": "Visit and loyalty history logs partitioned by tenantId"
     },
     "/packageTemplates/{templateId}": {
       "schema": "PackageTemplate",
-      "description": "Available package templates"
+      "description": "Available package templates per tenant"
     },
     "/serviceTemplates/{templateId}": {
       "schema": "ServiceTemplate",
-      "description": "Available standard services"
+      "description": "Available standard services per tenant"
     },
-    "/shopConfig/main": {
+    "/shopConfig/{tenantId}": {
       "schema": "ShopConfig",
-      "description": "Main salon configuration"
+      "description": "Salon configuration keyed by tenantId"
     },
     "/branches/{branchId}": {
       "schema": "Branch",
-      "description": "List of salon branch locations"
+      "description": "Salon branch locations per tenant"
     },
     "/bookings/{bookingId}": {
       "schema": "Booking",
-      "description": "Customer appointment records"
+      "description": "Customer appointment records per tenant"
     }
   }
 }

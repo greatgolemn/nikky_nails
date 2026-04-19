@@ -13,7 +13,7 @@ interface CustomerCardProps {
   branches?: Branch[];
   serviceTemplates?: ServiceTemplate[];
   shopConfig?: ShopConfig;
-  onSubmitBooking?: (booking: Omit<Booking, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  onSubmitBooking?: (booking: Omit<Booking, 'id' | 'createdAt' | 'status' | 'tenantId'>) => Promise<void>;
 }
 
 export const CustomerCard: React.FC<CustomerCardProps> = ({ 

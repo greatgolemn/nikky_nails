@@ -24,31 +24,39 @@ const db = getFirestore(firebaseConfig.firestoreDatabaseId);
 const app = express();
 const port = 3000;
 
-// LINE Config
-const lineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || 'DUMMY',
-  channelSecret: process.env.LINE_CHANNEL_SECRET || 'DUMMY',
-};
+// ============================================
+// Multi-Tenant LINE Webhook (Dynamic per tenant)
+// ============================================
 
-// Use middleware only for the real webhook route
-const lineMiddleware = line.middleware(lineConfig);
-
-async function handleEvent(event: any, client: any) {
+/**
+ * Each tenant registers their own LINE OA credentials.
+ * Webhook URL pattern: POST /api/line-webhook/:tenantId
+ * LINE sends events here → we look up tenant config → process events under that tenant.
+ */
+async function handleLineEvent(event: any, client: any, tenantId: string) {
   if (event.type !== 'follow') return null;
 
   const userId = event.source.userId;
   try {
-    // Get profile
     const profile = await client.getProfile(userId);
     const { displayName } = profile;
 
-    // Check if member exists by lineUserId
+    // Check if member already exists in this tenant
     const membersRef = db.collection('members');
-    const snapshot = await membersRef.where('lineUserId', '==', userId).limit(1).get();
+    const snapshot = await membersRef
+      .where('tenantId', '==', tenantId)
+      .where('lineUserId', '==', userId)
+      .limit(1)
+      .get();
 
     if (snapshot.empty) {
-      // Create new member automatically
+      // Get tenant info for welcome message
+      const tenantDoc = await db.collection('tenants').doc(tenantId).get();
+      const shopName = tenantDoc.exists ? tenantDoc.data()?.shopName : 'NailSaaS';
+
+      // Create new member automatically under this tenant
       await membersRef.add({
+        tenantId,
         name: displayName,
         phone: 'LINE-' + userId.slice(-4),
         points: 0,
@@ -58,44 +66,87 @@ async function handleEvent(event: any, client: any) {
         lineDisplayName: displayName,
         createdAt: new Date().toISOString(),
       });
-      
+
       // Send welcome message
       await client.replyMessage({
         replyToken: event.replyToken,
-        messages: [{ type: 'text', text: `ยินดีต้อนรับคุณ ${displayName} สู่ Nickki nail! คุณได้สมัครสมาชิกเรียบร้อยแล้วค่ะ ✨` }],
+        messages: [{
+          type: 'text',
+          text: `ยินดีต้อนรับคุณ ${displayName} สู่ ${shopName}! คุณได้สมัครสมาชิกเรียบร้อยแล้วค่ะ ✨`
+        }],
       });
     }
   } catch (error) {
-    console.error('Error handling LINE follow:', error);
+    console.error(`Error handling LINE follow for tenant ${tenantId}:`, error);
   }
   return null;
 }
 
-// API Routes
-app.post('/api/line-webhook', lineMiddleware, (req, res) => {
-  const client = new line.messagingApi.MessagingApiClient(lineConfig);
-  Promise.all(req.body.events.map((event: any) => handleEvent(event, client)))
-    .then((result) => res.json(result))
-    .catch((err) => {
-      console.error(err);
-      res.status(500).end();
-    });
+// Dynamic LINE Webhook — each tenant has their own endpoint
+app.post('/api/line-webhook/:tenantId', express.raw({ type: 'application/json' }), async (req, res) => {
+  const { tenantId } = req.params;
+
+  try {
+    // 1. Look up tenant's LINE credentials from Firestore
+    const tenantDoc = await db.collection('tenants').doc(tenantId).get();
+    if (!tenantDoc.exists) {
+      console.error(`Tenant not found: ${tenantId}`);
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    const tenantData = tenantDoc.data();
+    if (!tenantData?.lineConfig?.channelAccessToken || !tenantData?.lineConfig?.channelSecret) {
+      console.error(`LINE config not found for tenant: ${tenantId}`);
+      return res.status(400).json({ error: 'LINE credentials not configured for this tenant' });
+    }
+
+    const tenantLineConfig = {
+      channelAccessToken: tenantData.lineConfig.channelAccessToken,
+      channelSecret: tenantData.lineConfig.channelSecret,
+    };
+
+    // 2. Validate LINE signature
+    const signature = req.headers['x-line-signature'] as string;
+    if (!signature || !line.validateSignature(req.body, tenantLineConfig.channelSecret, signature)) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    // 3. Parse and process events
+    const body = JSON.parse(req.body.toString());
+    const client = new line.messagingApi.MessagingApiClient(tenantLineConfig);
+
+    await Promise.all(
+      body.events.map((event: any) => handleLineEvent(event, client, tenantId))
+    );
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('LINE Webhook Error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Simulation endpoint for frontend to demonstrate the "Auto-Signup" flow
+// ============================================
+// Simulation Endpoint (for development/testing)
+// ============================================
 app.post('/api/simulate-line-follow', express.json(), async (req, res) => {
-  const { userId, displayName } = req.body;
-  
-  if (!userId || !displayName) {
-    return res.status(400).json({ error: 'Missing userId or displayName' });
+  const { userId, displayName, tenantId } = req.body;
+
+  if (!userId || !displayName || !tenantId) {
+    return res.status(400).json({ error: 'Missing userId, displayName, or tenantId' });
   }
 
   try {
     const membersRef = db.collection('members');
-    const snapshot = await membersRef.where('lineUserId', '==', userId).limit(1).get();
+    const snapshot = await membersRef
+      .where('tenantId', '==', tenantId)
+      .where('lineUserId', '==', userId)
+      .limit(1)
+      .get();
 
     if (snapshot.empty) {
       await membersRef.add({
+        tenantId,
         name: displayName,
         phone: 'SIM-' + userId.slice(-4),
         points: 0,
@@ -115,11 +166,39 @@ app.post('/api/simulate-line-follow', express.json(), async (req, res) => {
   }
 });
 
-// Diagnostic endpoint
+// ============================================
+// Admin API Routes
+// ============================================
+
+// List all tenants (Super Admin only)
+app.get('/api/admin/tenants', express.json(), async (req, res) => {
+  try {
+    const tenantsSnap = await db.collection('tenants').get();
+    const tenants = tenantsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ tenants, count: tenants.length });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Toggle tenant active/inactive (Super Admin only)
+app.patch('/api/admin/tenants/:tenantId', express.json(), async (req, res) => {
+  const { tenantId } = req.params;
+  const { isActive } = req.body;
+
+  try {
+    await db.collection('tenants').doc(tenantId).update({ isActive: !!isActive });
+    res.json({ success: true, tenantId, isActive: !!isActive });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Platform-wide diagnostic endpoint
 app.get('/api/admin/diag', async (req, res) => {
   try {
     const results: any = {};
-    const collections = ['members', 'packages', 'transactions'];
+    const collections = ['tenants', 'members', 'packages', 'transactions', 'bookings'];
     for (const coll of collections) {
       const snap = await db.collection(coll).get();
       results[coll] = {
@@ -133,7 +212,16 @@ app.get('/api/admin/diag', async (req, res) => {
   }
 });
 
-// Middleware for Vite
+// ============================================
+// Health check
+// ============================================
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ============================================
+// Vite Middleware (Development) / Static (Production)
+// ============================================
 if (process.env.NODE_ENV !== 'production') {
   const vite = await createViteServer({
     server: { middlewareMode: true },

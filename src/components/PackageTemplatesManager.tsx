@@ -5,7 +5,7 @@ import { Plus, Trash2, CreditCard, X, Save } from 'lucide-react';
 
 interface PackageTemplatesManagerProps {
   templates: PackageTemplate[];
-  onAdd: (template: Omit<PackageTemplate, 'id'>) => void;
+  onAdd: (template: Omit<PackageTemplate, 'id' | 'tenantId'>) => void;
   onDelete: (id: string) => void;
 }
 
