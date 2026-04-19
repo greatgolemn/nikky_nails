@@ -1,32 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Users, Phone, Search, Plus } from 'lucide-react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTenant } from '../../contexts/TenantContext';
-import { db, collection, onSnapshot, query, where, orderBy } from '../../firebase';
-import { Member } from '../../types';
+import { db, collection, onSnapshot, query, where, orderBy, getDocs } from '../../firebase';
+import { Member, Transaction } from '../../types';
 
 export const StoreDashboard: React.FC = () => {
   const { tenantId, shopConfig } = useTenant();
   const navigate = useNavigate();
   const [members, setMembers] = useState<Member[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'members'),
-      where('tenantId', '==', tenantId),
-      orderBy('createdAt', 'desc')
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() } as Member)));
-    });
-    return () => unsub();
+    // 1. Fetch Members
+    const qM = query(collection(db, 'members'), where('tenantId', '==', tenantId), orderBy('createdAt', 'desc'));
+    const unsubM = onSnapshot(qM, (snap) => setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() } as Member))));
+
+    // 2. Fetch Transactions for Analytics
+    const qT = query(collection(db, 'transactions'), where('tenantId', '==', tenantId));
+    const unsubT = onSnapshot(qT, (snap) => setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction))));
+
+    return () => { unsubM(); unsubT(); };
   }, [tenantId]);
 
   const filteredMembers = members.filter(m =>
-    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.phone.includes(searchQuery)
+    m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.phone.includes(searchQuery)
   );
 
   const greeting = (() => {
@@ -36,6 +36,36 @@ export const StoreDashboard: React.FC = () => {
     if (h < 19) return 'สวัสดีตอนเย็น';
     return 'สวัสดีตอนค่ำ';
   })();
+
+  // Analyics Calculations
+  const analytics = useMemo(() => {
+    let totalRevenue = 0;
+    const revenueByDay: Record<string, number> = {};
+    const serviceCounts: Record<string, number> = {};
+
+    transactions.forEach(tx => {
+       if (tx.amount && tx.amount > 0) totalRevenue += tx.amount;
+       
+       // Revenue over time
+       if (tx.timestamp) {
+         const d = tx.timestamp.toDate();
+         const dateString = `${d.getDate()}/${d.getMonth()+1}`;
+         if (!revenueByDay[dateString]) revenueByDay[dateString] = 0;
+         revenueByDay[dateString] += tx.amount || 0;
+       }
+
+       // Service Popularity
+       if (tx.serviceName) {
+         if (!serviceCounts[tx.serviceName]) serviceCounts[tx.serviceName] = 0;
+         serviceCounts[tx.serviceName] += 1;
+       }
+    });
+
+    const chartRevenue = Object.entries(revenueByDay).map(([date, total]) => ({ date, total }));
+    const chartServices = Object.entries(serviceCounts).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count).slice(0, 5);
+
+    return { totalRevenue, chartRevenue, chartServices };
+  }, [transactions]);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
@@ -49,10 +79,43 @@ export const StoreDashboard: React.FC = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard label="ลูกค้าทั้งหมด" value={members.length} color="primary" trend={`${members.length} รายการ`} />
-        <StatCard label="ระดับ Gold" value={members.filter(m => m.tier === 'Gold').length} color="gold" trend="ยอดสะสม > 10,000" />
-        <StatCard label="ระดับ Silver" value={members.filter(m => m.tier === 'Silver').length} color="silver" trend="ยอดสะสม > 5,000" />
-        <StatCard label="ระดับ Bronze" value={members.filter(m => m.tier === 'Bronze').length} color="bronze" trend="ลูกค้าทั่วไป" />
+        <StatCard label="รายได้รวม" value={`฿${analytics.totalRevenue.toLocaleString()}`} color="primary" trend="ทั้งหมด" />
+        <StatCard label="ลูกค้าทั้งหมด" value={members.length.toString()} color="silver" trend="บัญชี" />
+        <StatCard label="ระดับ Gold" value={members.filter(m => m.tier === 'Gold').length.toString()} color="gold" trend="ยอดสะสม > 10,000" />
+        <StatCard label="บริการที่ขายไป" value={transactions.length.toString()} color="bronze" trend="ครั้ง" />
+      </div>
+
+      {/* Advanced Analytics Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="glass-card p-6 h-80 flex flex-col">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-text-muted mb-6">รายได้ย้อนหลัง</h3>
+          <div className="flex-1 min-h-0 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={analytics.chartRevenue}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} dx={-10} />
+                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                <Line type="monotone" dataKey="total" stroke="var(--color-primary, #C89595)" strokeWidth={3} dot={{ strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="glass-card p-6 h-80 flex flex-col">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-text-muted mb-6">บริการยอดนิยม (Top 5)</h3>
+          <div className="flex-1 min-h-0 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={analytics.chartServices} layout="vertical" margin={{ left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#475569' }} width={120} />
+                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                <Bar dataKey="count" fill="var(--color-primary, #C89595)" radius={[0, 4, 4, 0]} barSize={24} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
 
       {/* Quick Search + Recent Activity */}
@@ -123,7 +186,7 @@ export const StoreDashboard: React.FC = () => {
   );
 };
 
-function StatCard({ label, value, trend, color }: { label: string; value: number; trend: string; color: string }) {
+function StatCard({ label, value, trend, color }: { label: string; value: string; trend: string; color: string }) {
   const getColors = () => {
     switch (color) {
       case 'gold': return { bar: 'bg-[#D4AF37]', text: 'text-[#8E6F1F]', bg: 'bg-[#FDF5E6]' };
@@ -142,7 +205,7 @@ function StatCard({ label, value, trend, color }: { label: string; value: number
         <div className="flex justify-between items-start mb-6">
           <p className="text-[10px] uppercase font-black text-text-muted tracking-[0.2em]">{label}</p>
         </div>
-        <h4 className={`text-4xl font-bold tracking-tight font-serif ${colors.text}`}>{value}</h4>
+        <h4 className={`text-3xl font-bold tracking-tight font-serif ${colors.text} truncate`}>{value}</h4>
         <div className="flex items-center gap-1.5 py-1 px-2.5 bg-bg rounded-lg w-fit border border-border/50 mt-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">{trend}</span>
         </div>

@@ -127,6 +127,46 @@ app.post('/api/line-webhook/:tenantId', express.raw({ type: 'application/json' }
 });
 
 // ============================================
+// Automated Push Notifications
+// ============================================
+app.post('/api/notify-booking/:tenantId', express.json(), async (req, res) => {
+  const { tenantId } = req.params;
+  const { lineUserId, serviceName, branchName, date, timeSlot, status } = req.body;
+
+  if (!lineUserId) return res.status(400).json({ error: 'Missing lineUserId' });
+
+  try {
+    const tenantDoc = await db.collection('tenants').doc(tenantId).get();
+    if (!tenantDoc.exists) return res.status(404).json({ error: 'Tenant not found' });
+
+    const tenantData = tenantDoc.data();
+    if (!tenantData?.lineConfig?.channelAccessToken) {
+      // If store hasn't configured LINE, silently skip push notification
+      return res.json({ success: false, message: 'LINE not configured by tenant' });
+    }
+
+    const client = new line.messagingApi.MessagingApiClient({
+      channelAccessToken: tenantData.lineConfig.channelAccessToken,
+    });
+
+    const shopName = tenantData.shopName || 'NailSaaS';
+    const messageText = status === 'confirmed' 
+      ? `✅ ยืนยันการจองคิว\nร้าน: ${shopName}\nบริการ: ${serviceName}\nสาขา: ${branchName}\nวันที่: ${date} เวลา ${timeSlot}\n\nรอให้บริการอยู่นะคะ ✨`
+      : `📅 จองคิวสำเร็จ (รอร้านยืนยัน)\nร้าน: ${shopName}\nบริการ: ${serviceName}\nสาขา: ${branchName}\nวันที่: ${date} เวลา ${timeSlot}\n\nหากร้านยืนยันจะแจ้งใหม่อีกครั้งค่ะ`;
+
+    await client.pushMessage({
+      to: lineUserId,
+      messages: [{ type: 'text', text: messageText }]
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error(`Notification Push Error for ${tenantId}:`, err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
 // Simulation Endpoint (for development/testing)
 // ============================================
 app.post('/api/simulate-line-follow', express.json(), async (req, res) => {

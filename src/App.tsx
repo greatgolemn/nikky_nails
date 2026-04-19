@@ -27,6 +27,7 @@ import { MemberDetailPage } from './pages/store/MemberDetailPage';
 import { StaffManager } from './pages/store/StaffManager';
 import { BillingPage } from './pages/store/BillingPage';
 import { AcceptInvite } from './pages/AcceptInvite';
+import { LiffEntry } from './pages/liff/LiffEntry';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 /**
@@ -47,6 +48,7 @@ const AppRoutes: React.FC = () => {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/invite/:inviteId" element={<AcceptInvite />} />
+        <Route path="/liff" element={<LiffEntry />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -58,6 +60,7 @@ const AppRoutes: React.FC = () => {
       <Routes>
         <Route path="/onboarding" element={<OnboardingWizard />} />
         <Route path="/invite/:inviteId" element={<AcceptInvite />} />
+        <Route path="/liff" element={<LiffEntry />} />
         <Route path="*" element={<Navigate to="/onboarding" replace />} />
       </Routes>
     );
@@ -68,6 +71,7 @@ const AppRoutes: React.FC = () => {
     return (
       <Routes>
         <Route path="/invite/:inviteId" element={<AcceptInvite />} />
+        <Route path="/liff" element={<LiffEntry />} />
         <Route element={<AdminLayout />}>
           <Route path="/admin" element={<SuperAdminDashboard />} />
           <Route path="/admin/tenants" element={<TenantList />} />
@@ -83,6 +87,7 @@ const AppRoutes: React.FC = () => {
     <TenantProvider>
       <Routes>
         <Route path="/invite/:inviteId" element={<AcceptInvite />} />
+        <Route path="/liff" element={<LiffEntry />} />
         <Route element={<StoreLayout />}>
           <Route index element={<StoreDashboard />} />
           <Route path="/members" element={<MemberListPage />} />

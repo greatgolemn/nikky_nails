@@ -476,8 +476,34 @@ export const SettingsPage: React.FC = () => {
                       {copiedWebhook ? <CheckCircle2 size={16} className="text-[#06C755]" /> : <Copy size={16} />}
                     </button>
                   </div>
+                  <p className="text-[10px] text-text-muted mt-2 leading-relaxed ml-1">
+                     *หากเชื่อมต่อเรียบร้อยแล้ว ระบบจะสามารถรับแจ้งเตือนจากลูกค้าที่ทักเข้ามาได้
+                  </p>
                 </div>
               )}
+            </div>
+            
+            <div className="p-8 pt-0 space-y-6">
+              <div className="pt-6 border-t border-border/50">
+                <h4 className="font-bold text-sm text-text-main mb-2">ลิงก์สำหรับ Rich Menu (LIFF App)</h4>
+                <p className="text-xs text-text-muted leading-relaxed mb-4">
+                  คัดลอกลิงก์ด้านล่างนี้ไปใส่ในแชทบอท หรือ ริชเมนู (Rich Menu) ของ LINE OA ของคุณ เพื่อเปิดหน้า **ระบบจองคิว** บนมือถือของลูกค้า
+                </p>
+                <div className="flex items-center gap-2 bg-[#06C755]/10 text-[#06C755] p-1 pl-4 rounded-xl border border-[#06C755]/20 shadow-inner">
+                  <span className="font-mono text-xs font-bold truncate flex-1 block overflow-hidden" title={`https://liff.line.me/${(import.meta as any).env.VITE_MASTER_LIFF_ID || '16xxxxxx-xxxxxx'}?tenantId=${tenantId}`}>
+                    https://liff.line.me/{(import.meta as any).env.VITE_MASTER_LIFF_ID || '16xxxxxx-xxxxxx'}?tenantId={tenantId}
+                  </span>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://liff.line.me/${(import.meta as any).env.VITE_MASTER_LIFF_ID || '16xxxxxx-xxxxxx'}?tenantId=${tenantId}`);
+                      alert('คัดลอกลิงก์ LIFF สำหรับเข้าหน้าระบบจองคิวเรียบร้อยแล้ว');
+                    }}
+                    className="p-2.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-lg transition-colors flex-shrink-0"
+                  >
+                    <Copy size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
