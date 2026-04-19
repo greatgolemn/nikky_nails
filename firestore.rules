@@ -1,0 +1,99 @@
+/**
+ * LushNail CRM Security Rules
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Member: { name, phone, points, tier, totalSpent, lastVisit, createdAt }
+    // Package: { memberId, title, totalSessions, remainingSessions, expiryDate, status }
+    // Transaction: { memberId, type, amount, pointsChange, serviceName, timestamp }
+    // Branch: { name, phone, lat, lng, address, createdAt }
+    // ===============================================================
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         request.auth.token.email == "greatgolemn@gmail.com"); 
+    }
+
+    function isOwner(memberUid) {
+      // In this CRM, we often check by phone or uid if linked. 
+      // For simple kiosk/LINE OA demo, we permit reading if the phone matches (to be implemented in app logic)
+      // but for security rules, we stick to UID if auth is used.
+      return isAuthenticated() && request.auth.uid == memberUid;
+    }
+
+    // Validation
+    function isValidMember(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.phone is string && data.phone.size() >= 9 &&
+             data.points is number && data.points >= 0 &&
+             data.tier in ['Bronze', 'Silver', 'Gold'];
+    }
+
+    function isValidPackage(data) {
+      return data.title is string && data.title.size() > 0 &&
+             data.totalSessions is number && data.remainingSessions is number &&
+             data.remainingSessions <= data.totalSessions;
+    }
+
+    // Rules
+    match /members/{memberId} {
+      // Admins (Salon Staff) can do everything
+      allow read, write: if isAdmin();
+      
+      // Customers can read their own data
+      // For a demo, we might allow reading by phone if we don't force full auth for customers immediately
+      // but strictly:
+      allow read: if isOwner(memberId);
+    }
+
+    match /packages/{packageId} {
+      allow read, write: if isAdmin();
+      allow read: if isAuthenticated() && isOwner(get(/databases/$(database)/documents/packages/$(packageId)).data.memberId);
+    }
+
+    match /transactions/{transactionId} {
+      allow read, create: if isAdmin();
+      allow read: if isAuthenticated() && isOwner(resource.data.memberId);
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /packageTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /serviceTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /shopConfig/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /branches/{branchId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow read, write: if isAdmin();
+      allow create: if isAuthenticated();
+    }
+  }
+}

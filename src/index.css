@@ -1,0 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Kanit", sans-serif;
+  --font-sans: "Prompt", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-primary: #C89595;
+  --color-primary-dark: #A67373;
+  --color-primary-light: #E9D5D5;
+  --color-accent: #D4AF37; /* Muted Gold */
+  --color-accent-soft: #FDF5E6;
+  --color-bg: #F9F7F5; /* Warm off-white */
+  --color-bg-paper: #FFFFFF;
+  --color-text-main: #2D2424;
+  --color-text-muted: #8C7B7B;
+  --color-border: #E8E1DF;
+  --color-sidebar-bg: #FFFFFF;
+  --color-success: #34D399;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-text-main font-sans antialiased selection:bg-primary-light selection:text-primary-dark;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif leading-tight tracking-tight;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/40 shadow-xl shadow-primary/5 rounded-[40px];
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white px-8 py-3.5 rounded-2xl font-bold transition-all hover:bg-primary-dark hover:shadow-xl hover:shadow-primary/20 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-secondary {
+    @apply bg-white border border-border text-text-main px-8 py-3.5 rounded-2xl font-bold transition-all hover:bg-bg hover:border-primary/30 active:scale-95 disabled:opacity-50;
+  }
+
+  .input-field {
+    @apply bg-white border border-border rounded-2xl px-5 py-4 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:text-text-muted/50;
+  }
+
+  input::-webkit-calendar-picker-indicator {
+    @apply cursor-pointer;
+    opacity: 0;
+    position: absolute;
+    right: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-4 px-6 py-4.5 rounded-3xl transition-all cursor-pointer hover:bg-white hover:shadow-sm text-text-muted;
+  }
+
+  .sidebar-item-active {
+    @apply bg-white shadow-xl shadow-primary/10 text-primary border border-primary/5 font-bold;
+  }
+
+  .stat-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/40 shadow-xl shadow-primary/5 rounded-[40px] p-10 flex flex-col gap-3 relative overflow-hidden;
+  }
+
+  .stat-card-accent {
+    @apply before:absolute before:top-0 before:left-0 before:w-1.5 before:h-full before:bg-primary;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full hover:bg-text-muted/30;
+}

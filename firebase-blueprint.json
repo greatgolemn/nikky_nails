@@ -1,0 +1,160 @@
+{
+  "entities": {
+    "Member": {
+      "title": "Member",
+      "description": "Salon member information and loyalty status",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Customer name" },
+        "phone": { "type": "string", "description": "Phone number used for identification" },
+        "points": { "type": "number", "description": "Current loyalty points balance" },
+        "totalSpent": { "type": "number", "description": "Aggregate spending amount for tiering" },
+        "tier": { "type": "string", "enum": ["Bronze", "Silver", "Gold"], "description": "Membership level" },
+        "preferredBranchId": { "type": "string", "description": "ID of the branch where the member registered" },
+        "lineUserId": { "type": "string", "description": "Unique identifier for LINE OA" },
+        "lineDisplayName": { "type": "string", "description": "Display name from LINE profile" },
+        "lastVisit": { "type": "string", "format": "date-time", "description": "Timestamp of the last salon visit" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the member was registered" }
+      },
+      "required": ["name", "phone", "points", "tier"]
+    },
+    "Package": {
+      "title": "Package",
+      "description": "Prepaid salon services or subscription packages",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string", "description": "Reference to the owner member" },
+        "title": { "type": "string", "description": "Package name (e.g., Gel Polish x10)" },
+        "totalSessions": { "type": "number", "description": "Original session count" },
+        "remainingSessions": { "type": "number", "description": "Current sessions left" },
+        "expiryDate": { "type": "string", "format": "date-time", "description": "When the package expires" },
+        "status": { "type": "string", "enum": ["active", "expired", "depleted"] }
+      },
+      "required": ["memberId", "title", "totalSessions", "remainingSessions", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Record of points, spending, or package usage",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string", "description": "Reference to the member" },
+        "type": { "type": "string", "enum": ["point_earn", "point_redeem", "package_buy", "package_use"] },
+        "amount": { "type": "number", "description": "Currency amount if applicable" },
+        "pointsChange": { "type": "number", "description": "Points added or subtracted" },
+        "serviceName": { "type": "string", "description": "Name of service performed" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["memberId", "type", "timestamp"]
+    },
+    "PackageTemplate": {
+      "title": "PackageTemplate",
+      "description": "Pre-defined package options created by admin",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "price": { "type": "number" },
+        "sessions": { "type": "number" }
+      },
+      "required": ["title", "price", "sessions"]
+    },
+    "ServiceTemplate": {
+      "title": "ServiceTemplate",
+      "description": "Pre-defined standard salon services",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "number" }
+      },
+      "required": ["name", "price"]
+    },
+    "ShopConfig": {
+      "title": "ShopConfig",
+      "description": "General salon settings and branding",
+      "type": "object",
+      "properties": {
+        "shopName": { "type": "string" },
+        "shopPhone": { "type": "string" },
+        "businessHours": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "day": { "type": "string" },
+              "open": { "type": "string" },
+              "close": { "type": "string" },
+              "isOpen": { "type": "boolean" }
+            }
+          }
+        }
+      },
+      "required": ["shopName"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "Salon branch location details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Branch name (e.g., Siam, Asoke)" },
+        "phone": { "type": "string", "description": "Direct contact for this branch" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "lat", "lng"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Appointment reservation for laundry services",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string" },
+        "memberName": { "type": "string" },
+        "memberPhone": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "timeSlot": { "type": "string" },
+        "branchId": { "type": "string" },
+        "branchName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["memberId", "serviceName", "date", "timeSlot", "status"]
+    }
+  },
+  "firestore": {
+    "/members/{memberId}": {
+      "schema": "Member",
+      "description": "List of all salon customers"
+    },
+    "/packages/{packageId}": {
+      "schema": "Package",
+      "description": "Individual member packages"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Visit and loyalty history logs"
+    },
+    "/packageTemplates/{templateId}": {
+      "schema": "PackageTemplate",
+      "description": "Available package templates"
+    },
+    "/serviceTemplates/{templateId}": {
+      "schema": "ServiceTemplate",
+      "description": "Available standard services"
+    },
+    "/shopConfig/main": {
+      "schema": "ShopConfig",
+      "description": "Main salon configuration"
+    },
+    "/branches/{branchId}": {
+      "schema": "Branch",
+      "description": "List of salon branch locations"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Customer appointment records"
+    }
+  }
+}
